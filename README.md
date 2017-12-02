@@ -16,52 +16,59 @@ If you want to add global in your model, you should implement "_Illuminate\Datab
 
 _File: Illuminate\Database\Eloquent\Scope.php_
 
-<pre spellcheck="false"><span class="hljs-class"><span class="hljs-keyword">interface</span> <span class="hljs-title">Scope</span></span> {
-    <span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">apply</span><span class="hljs-params">(Builder $builder, Model $model)</span></span>;
+
+```php
+interface Scope {
+    public function apply(Builder $builder, Model $model);
 }
-</pre>
+```
 
 In this apply method, you can add any condition to your model's query. For example, in the case of fetching only unread notifications, it can be
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">NotificationScope</span> <span class="hljs-keyword">implements</span> <span class="hljs-title">Scope</span></span> {
 
-  ﻿<span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">apply</span><span class="hljs-params">(Builder $builder, Model $model)</span></span> {
-      $builder->where(<span class="hljs-string">'is_read'</span>, <span class="hljs-keyword">false</span>);
+```php
+public class NotificationScope implements Scope {
+
+  ﻿public function apply(Builder $builder, Model $model) {
+      $builder->where('is_read', false);
   }
 
 }
-</pre>
+```
+
 
 Let's see how does Laravel call this function.
 
 Whenever you want to apply global scope to your model, you add the following line in the _boot_ method of the model.
 
-<pre spellcheck="false">protected static function boot()
+```php
+protected static function boot()
 {
-    <span class="hljs-attribute">parent</span>::<span class="hljs-built_in">boot</span>();
+    parent::boot();
 
-    <span class="hljs-attribute">static</span>::<span class="hljs-built_in">addGlobalScope</span>(new NotificationScope);
+    static::addGlobalScope(new NotificationScope);
 }
-</pre>
+```
 
 File: _Illuminate\Database\Eloquent\Model.php_
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">addGlobalScope</span><span class="hljs-params">($scope, Closure $implementation = null)</span></span> {
-    <span class="hljs-keyword">if</span> (is_string($scope) && ! is_null($implementation)) {
-        <span class="hljs-keyword">return</span> <span class="hljs-keyword">static</span>::$globalScopes[<span class="hljs-keyword">static</span>::class][$scope] = $implementation;
+```php
+public static function addGlobalScope($scope, Closure $implementation = null) {
+    if (is_string($scope) && ! is_null($implementation)) {
+        return static::$globalScopes[static::class][$scope] = $implementation;
     }
 
-    <span class="hljs-keyword">if</span> ($scope <span class="hljs-keyword">instanceof</span> Closure) {
-        <span class="hljs-keyword">return</span> <span class="hljs-keyword">static</span>::$globalScopes[<span class="hljs-keyword">static</span>::class][spl_object_hash($scope)] = $scope;
+    if ($scope instanceof Closure) {
+        return static::$globalScopes[static::class][spl_object_hash($scope)] = $scope;
     }
 
-    <span class="hljs-keyword">if</span> ($scope <span class="hljs-keyword">instanceof</span> Scope) {
-        <span class="hljs-keyword">return</span> <span class="hljs-keyword">static</span>::$globalScopes[<span class="hljs-keyword">static</span>::class][get_class($scope)] = $scope;
+    if ($scope instanceof Scope) {
+        return static::$globalScopes[static::class][get_class($scope)] = $scope;
     }
 
-    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> InvalidArgumentException(<span class="hljs-string">'Global scope must be an instance of Closure or Scope.'</span>);
+    throw new InvalidArgumentException('Global scope must be an instance of Closure or Scope.');
 }
-</pre>
+```
 
 What global scope method say is, you can add global scope to your model in multiple ways. But in every case, it will add a new entry to the static property _$globalScopes as a key-value pair, where the key is model's class name and the value is global scope's name._
 
@@ -75,47 +82,51 @@ Basically it is called from eloquent's get method which itself is called by mode
 
 File: _Illuminate\Database\Eloquent\Builder.php_
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">get</span><span class="hljs-params">($columns = [<span class="hljs-string">'*'</span>])</span></span>{
 
-  $builder = <span class="hljs-keyword">$this</span>->applyScopes();
+```php
+public function get($columns = ['*']){
 
-  $models = $builder->getModels($columns);
+  $builder = $this->applyScopes();
 
-  <span class="hljs-keyword">if</span> (count($models) > <span class="hljs-number">0</span>) {
-    $models = $builder->eagerLoadRelations($models);
+  $models = $builder->getModels($columns);
+
+  if (count($models) > 0) {
+    $models = $builder->eagerLoadRelations($models);
   }
 
-  <span class="hljs-keyword">return</span> $builder->getModel()->newCollection($models);
+  return $builder->getModel()->newCollection($models);
 
 }
-</pre>
+```
 
 This method calls _applyScopes_
 
 File: _Illuminate\Database\Eloquent\Builder.php_
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">applyScopes</span><span class="hljs-params">()</span></span>{
+```php
+public function applyScopes(){
 
-  <span class="hljs-keyword">if</span> (! <span class="hljs-keyword">$this</span>->scopes) {
-    <span class="hljs-keyword">return</span> <span class="hljs-keyword">$this</span>;
+  if (! $this->scopes) {
+    return $this;
   }
 
-  $builder = <span class="hljs-keyword">clone</span> <span class="hljs-keyword">$this</span>;
+  $builder = clone $this;
 
-  <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">$this</span>->scopes as $scope) {
+  foreach ($this->scopes as $scope) {
 
-    $builder->callScope(<span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-params">(Builder $builder)</span> <span class="hljs-title">use</span> <span class="hljs-params">($scope)</span></span> {
-      <span class="hljs-keyword">if</span> ($scope instanceof Closure) {
+    $builder->callScope(function (Builder $builder) use ($scope) {
+      if ($scope instanceof Closure) {
         $scope($builder);
-      } <span class="hljs-keyword">elseif</span> ($scope instanceof Scope) {
-        $scope->apply($builder, <span class="hljs-keyword">$this</span>->getModel());
+      } elseif ($scope instanceof Scope) {
+        $scope->apply($builder, $this->getModel());
       }
 
     });
   }
-  <span class="hljs-keyword">return</span> $builder;
+  return $builder;
 }
-</pre>
+```
+
 
 There are multiple things to notice here.
 
@@ -127,33 +138,36 @@ What going on here is, Whenever we build the query for any model, function _newQ
 
 File: _Illuminate\Database\Eloquent\Model.php_
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">newQuery</span><span class="hljs-params">()</span></span>{
-  $builder = <span class="hljs-keyword">$this</span>->newQueryWithoutScopes();
+```
+public function newQuery(){
+  $builder = $this->newQueryWithoutScopes();
 
-  <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">$this</span>->getGlobalScopes() <span class="hljs-keyword">as</span> $identifier => $scope) {
+  foreach ($this->getGlobalScopes() as $identifier => $scope) {
 
-    $builder->withGlobalScope($identifier, $scope);
+    $builder->withGlobalScope($identifier, $scope);
 
   }
 
-  <span class="hljs-keyword">return</span> $builder;
+  return $builder;
 }
-</pre>
+```
 
 The method of our interest is _**withGlobalScope**_
 
 File: _Illuminate\Database\Eloquent\Builder.php_
 
-<pre spellcheck="false"><span class="hljs-keyword">public</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">withGlobalScope</span><span class="hljs-params">($identifier, $scope)</span></span> {
-    <span class="hljs-keyword">$this</span>->scopes[$identifier] = $scope;
 
-    <span class="hljs-keyword">if</span> (method_exists($scope, <span class="hljs-string">'extend'</span>)) {
-        $scope->extend(<span class="hljs-keyword">$this</span>);
+```php
+public function withGlobalScope($identifier, $scope) {
+    $this->scopes[$identifier] = $scope;
+
+    if (method_exists($scope, 'extend')) {
+        $scope->extend($this);
     }
 
-    <span class="hljs-keyword">return</span> <span class="hljs-keyword">$this</span>;
+    return $this;
 }
-</pre>
+```
 
 Here we are setting scope property of builder which is same as model's _**globalScopes**_ with the key-value pair.
 
